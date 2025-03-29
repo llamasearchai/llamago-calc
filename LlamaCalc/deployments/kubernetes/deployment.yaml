@@ -1,0 +1,276 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: llamacalc
+  labels:
+    name: llamacalc
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llamacalc-config
+  namespace: llamacalc
+data:
+  config.yaml: |
+    # LlamaCalc Configuration
+    server:
+      port: 50051
+      graceful_shutdown_timeout: 30s
+    security:
+      tls:
+        enabled: true
+        cert_file: "/app/certs/server.crt"
+        key_file: "/app/certs/server.key"
+      authentication:
+        jwt:
+          enabled: true
+          secret: "${JWT_SECRET}"  # Will be replaced by env var
+          expiration: 24h
+        mtls:
+          enabled: true
+          client_ca_file: "/app/certs/ca.crt"
+      authorization:
+        rbac:
+          enabled: true
+          config_file: "/app/config/rbac.yaml"
+    calculator:
+      precision: 10
+      max_decimal_places: 10
+      overflow_check: true
+    rate_limit:
+      enabled: true
+      requests_per_second: 1000
+      burst: 50
+    observability:
+      logging:
+        level: "info"
+        format: "json"
+      metrics:
+        enabled: true
+        prometheus:
+          enabled: true
+          endpoint: "/metrics"
+      tracing:
+        enabled: true
+        jaeger:
+          enabled: true
+          endpoint: "http://jaeger.monitoring:14268/api/traces"
+          service_name: "llamacalc"
+  rbac.yaml: |
+    roles:
+      - name: admin
+        permissions:
+          - "*"
+      - name: operator
+        permissions:
+          - "Add"
+          - "Subtract"
+          - "Multiply"
+          - "Divide"
+          - "Health"
+      - name: basic
+        permissions:
+          - "Add"
+          - "Subtract"
+          - "Health"
+      - name: readonly
+        permissions:
+          - "Health"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llamacalc
+  namespace: llamacalc
+  labels:
+    app: llamacalc
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: llamacalc
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: llamacalc
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "50051"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: llamacalc
+        image: llamacalc:latest
+        imagePullPolicy: IfNotPresent
+        args:
+          - "serve"
+          - "--config"
+          - "/app/config/config.yaml"
+        ports:
+        - containerPort: 50051
+          name: grpc
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+        livenessProbe:
+          exec:
+            command:
+            - "/app/llamacalc"
+            - "health"
+            - "--addr"
+            - "localhost:50051"
+            - "--insecure"
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - "/app/llamacalc"
+            - "health"
+            - "--addr"
+            - "localhost:50051"
+            - "--insecure"
+          initialDelaySeconds: 3
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        env:
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: llamacalc-secrets
+              key: jwt-secret
+        - name: LOG_LEVEL
+          value: "info"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+        - name: certs
+          mountPath: /app/certs
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: llamacalc-config
+      - name: certs
+        secret:
+          secretName: llamacalc-certs
+      terminationGracePeriodSeconds: 30
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - llamacalc
+              topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llamacalc
+  namespace: llamacalc
+  labels:
+    app: llamacalc
+spec:
+  selector:
+    app: llamacalc
+  ports:
+  - port: 50051
+    targetPort: 50051
+    name: grpc
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: llamacalc-secrets
+  namespace: llamacalc
+type: Opaque
+data:
+  jwt-secret: U3VwZXJTZWNyZXRKV1RLZXlGb3JMbGFtYUNhbGMK  # Base64 encoded "SuperSecretJWTKeyForLlamaCalc"
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: llamacalc-ingress
+  namespace: llamacalc
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  tls:
+  - hosts:
+    - llamacalc.example.com
+    secretName: llamacalc-tls
+  rules:
+  - host: llamacalc.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: llamacalc
+            port:
+              number: 50051
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: llamacalc
+  namespace: llamacalc
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: llamacalc
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+    scaleUp:
+      stabilizationWindowSeconds: 60 

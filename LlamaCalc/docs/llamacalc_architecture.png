@@ -1,0 +1,17 @@
+This file should be replaced with an actual architecture diagram showing:
+
+1. Client applications connecting to the LlamaCalc server
+2. The server's internal components:
+   - gRPC server
+   - Authentication/Authorization layer
+   - RBAC layer
+   - Calculator core service
+3. Supporting infrastructure:
+   - Prometheus monitoring
+   - Logging system
+   - Rate limiting
+4. Security features:
+   - mTLS certificates
+   - JWT authentication
+
+The diagram should use professional colors and be properly labeled. 

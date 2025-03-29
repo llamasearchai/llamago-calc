@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "llamacalc/pkg/proto";
+
+import "LlamaCalc/pkg/proto/health.proto";
+
+// Calculator service for basic arithmetic operations
+service Calculator {
+  // Add two numbers
+  rpc Add(CalculationRequest) returns (CalculationResponse) {}
+  
+  // Subtract second number from first
+  rpc Subtract(CalculationRequest) returns (CalculationResponse) {}
+  
+  // Multiply two numbers
+  rpc Multiply(CalculationRequest) returns (CalculationResponse) {}
+  
+  // Divide first number by second
+  rpc Divide(CalculationRequest) returns (CalculationResponse) {}
+  
+  // Health check
+  rpc Health(HealthCheckRequest) returns (HealthCheckResponse) {}
+}
+
+// Request message containing two numbers for calculation
+message CalculationRequest {
+  // First operand
+  double a = 1;
+  // Second operand
+  double b = 2;
+  // User authentication token (when not using mTLS)
+  string auth_token = 3;
+  // User role for RBAC
+  string role = 4;
+}
+
+// Response message containing calculation result
+message CalculationResponse {
+  // Result of the calculation
+  double result = 1;
+  // Status code (0 = success, non-zero = error)
+  int32 status_code = 2;
+  // Error message (empty if success)
+  string error_message = 3;
+  // Operation performed
+  string operation = 4;
+  // Duration of calculation in nanoseconds
+  int64 duration_ns = 5;
+} 
