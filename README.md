@@ -47,7 +47,7 @@ graph TD
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/llamasearchai/llamago-calc.git
+    git clone https://llamasearch.ai
     cd llamago-calc
     ```
     *(Note: Replace URL with the final repository location)*
@@ -116,7 +116,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support & Community 💬
 
-*   Report bugs or request features via [GitHub Issues](https://github.com/llamasearchai/llamago-calc/issues). *(Update link)*
+*   Report bugs or request features via [GitHub Issues](https://llamasearch.ai *(Update link)*
 *   Join our community on [Discord](https://discord.gg/llamasearch) *(Update link if exists)*.
 
 ---
