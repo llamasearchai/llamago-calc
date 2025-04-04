@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  llamacalc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: llamacalc:latest
+    container_name: llamacalc
+    restart: unless-stopped
+    ports:
+      - "50051:50051"
+    volumes:
+      - ./config:/app/config
+      - ./certs:/app/certs
+    environment:
+      - LOG_LEVEL=info
+      - METRICS_ENABLED=true
+    healthcheck:
+      test: ["CMD", "/app/llamacalc", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    depends_on:
+      - prometheus
+    networks:
+      - llamacalc-network
+
+  prometheus:
+    image: prom/prometheus:v2.44.0
+    container_name: llamacalc-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - llamacalc-network
+
+  grafana:
+    image: grafana/grafana:10.0.0
+    container_name: llamacalc-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=adminpassword
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - prometheus
+    networks:
+      - llamacalc-network
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.46
+    container_name: llamacalc-jaeger
+    restart: unless-stopped
+    ports:
+      - "16686:16686"  # UI
+      - "14268:14268"  # Collector HTTP
+      - "14250:14250"  # Collector gRPC
+    environment:
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+    networks:
+      - llamacalc-network
+
+  load-generator:
+    build:
+      context: ./tools/load-generator
+      dockerfile: Dockerfile
+    image: llamacalc-load-generator:latest
+    container_name: llamacalc-load-generator
+    restart: "no"
+    environment:
+      - TARGET_HOST=llamacalc:50051
+      - RATE=10
+      - DURATION=60s
+    depends_on:
+      - llamacalc
+    networks:
+      - llamacalc-network
+
+volumes:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  llamacalc-network:
+    driver: bridge 

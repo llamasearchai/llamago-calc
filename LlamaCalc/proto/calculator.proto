@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package llamacalc;
+
+option go_package = "llamacalc/pkg/proto";
+
+// Calculator service definition
+service Calculator {
+  // Add operation
+  rpc Add(CalculationRequest) returns (CalculationResponse) {}
+  
+  // Subtract operation
+  rpc Subtract(CalculationRequest) returns (CalculationResponse) {}
+  
+  // Multiply operation
+  rpc Multiply(CalculationRequest) returns (CalculationResponse) {}
+  
+  // Divide operation
+  rpc Divide(CalculationRequest) returns (CalculationResponse) {}
+  
+  // Health check
+  rpc Health(HealthCheckRequest) returns (HealthCheckResponse) {}
+}
+
+// Request message for calculation operations
+message CalculationRequest {
+  // First operand
+  double a = 1;
+  
+  // Second operand
+  double b = 2;
+  
+  // Optional metadata
+  map<string, string> metadata = 3;
+}
+
+// Response message for calculation operations
+message CalculationResponse {
+  // Result of the calculation
+  double result = 1;
+  
+  // Status code
+  int32 status_code = 2;
+  
+  // Optional error message
+  string error_message = 3;
+  
+  // Calculation duration in nanoseconds
+  int64 duration_ns = 4;
+  
+  // Operation type
+  string operation = 5;
+  
+  // Trace ID for observability
+  string trace_id = 6;
+}
+
+// Health check request
+message HealthCheckRequest {
+  // Optional service name to check
+  string service = 1;
+}
+
+// Health check response
+message HealthCheckResponse {
+  // Health status enum
+  enum ServingStatus {
+    UNKNOWN = 0;
+    SERVING = 1;
+    NOT_SERVING = 2;
+    SERVICE_UNKNOWN = 3;
+  }
+  
+  // Status of the service
+  ServingStatus status = 1;
+}
